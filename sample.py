@@ -1,12 +1,15 @@
+#!/usr/bin/env spark-submit
 from __future__ import print_function
 import argparse
 import json
+import os
 
 from pyspark import SparkConf, SparkContext, StorageLevel
 from pyspark.sql import SparkSession, Column
 from pyspark.sql.functions import col
 import pyspark.sql.functions as fn
 import pyspark.sql.types as types
+
 
 def sample(args):
     conf = SparkConf().setMaster("yarn").setAppName("CMS Working Set")
@@ -41,7 +44,11 @@ def sample(args):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Randomly sample records from a spark data source on HDFS and output to a file")
+    parser = argparse.ArgumentParser(description=
+            "Randomly sample records from a spark data source on HDFS and output to a file.  Runs using spark-submit."
+            "Example paths available at https://github.com/dmwm/CMSSpark/wiki/Data-streams ."
+            "If accessing avro, please run prefixed with `spark-submit --packages com.databricks:spark-avro_2.11:4.0.0`"
+            )
     parser.add_argument("fin", metavar="INPUT", help="Input data source on hdfs. If leading '/hdfs/analytix.cern.ch' is found, it is removed automatically.")
     parser.add_argument("fout", metavar="OUTPUT", help="Output filename")
     parser.add_argument("-i", "--input-format", dest="format", help="Use the spark reader for format (default: infer from path name)", choices=['avro', 'csv', 'json', 'infer'], default='infer')
