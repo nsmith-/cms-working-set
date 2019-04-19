@@ -22,7 +22,7 @@ def run(args):
     avroreader = spark.read.format("com.databricks.spark.avro")
     csvreader = spark.read.format("com.databricks.spark.csv").option("nullValue","null").option("mode", "FAILFAST")
 
-    jobreports = avroreader.load("/project/awg/cms/jm-data-popularity/avro-snappy/year=201[678]/month=*/day=*/*.avro")
+    jobreports = avroreader.load("/project/awg/cms/jm-data-popularity/avro-snappy/year=201[6789]/month=*/day=*/*.avro")
     dbs_files = csvreader.schema(schemas.schema_files()).load("/project/awg/cms/CMS_DBS3_PROD_GLOBAL/current/FILES/part-m-00000")
     dbs_blocks = csvreader.schema(schemas.schema_blocks()).load("/project/awg/cms/CMS_DBS3_PROD_GLOBAL/current/BLOCKS/part-m-00000")
     dbs_datasets = csvreader.schema(schemas.schema_datasets()).load("/project/awg/cms/CMS_DBS3_PROD_GLOBAL/current/DATASETS/part-m-00000")
@@ -34,11 +34,11 @@ def run(args):
             .join(dbs_blocks, col('f_block_id')==col('b_block_id'))
             .join(dbs_datasets, col('f_dataset_id')==col('d_dataset_id'))
             .withColumn('day', (col('JobExecExitTimeStamp')-col('JobExecExitTimeStamp')%fn.lit(86400000))/fn.lit(1000))
-            .withColumn('input_campaign', fn.regexp_extract(col('d_dataset'), "^/[^/]*/(\w+)-", 1))
+            .withColumn('input_campaign', fn.regexp_extract(col('d_dataset'), "^/[^/]*/((?:HI|PA|PN|XeXe|)Run201\d\w-[^-]+|CMSSW_\d+|[^-]+)[^/]*/", 1))
             .groupBy('day', 'SubmissionTool', 'input_campaign', 'd_data_tier_id', 'SiteName')
             .agg(
                 fn.collect_set('b_block_id').alias('working_set_blocks'),
-                fn.sum('WrapCPU').alias('sum_WrapCPU'),
+                fn.sum(fn.col('WrapCPU')).alias('sum_WrapCPU'),  # *fn.col('NCores')
                 fn.sum('WrapWC').alias('sum_WrapWC'),
                 fn.count('WrapWC').alias('njobs'),
             )
