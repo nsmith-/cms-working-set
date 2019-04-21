@@ -32,13 +32,12 @@ def run(args):
                 .filter((col('JobExecExitTimeStamp')>0) & (col('JobExecExitCode')==0))
                 .replace('//', '/', 'FileName')
                 .join(dbs_files, col('FileName')==col('f_logical_file_name'))
-                .join(dbs_blocks, col('f_block_id')==col('b_block_id'))
                 .join(dbs_datasets, col('f_dataset_id')==col('d_dataset_id'))
                 .withColumn('day', (col('JobExecExitTimeStamp')-col('JobExecExitTimeStamp')%fn.lit(86400000))/fn.lit(1000))
                 .withColumn('input_campaign', fn.regexp_extract(col('d_dataset'), "^/[^/]*/((?:HI|PA|PN|XeXe|)Run201\d\w-[^-]+|CMSSW_\d+|[^-]+)[^/]*/", 1))
                 .groupBy('day', 'SubmissionTool', 'input_campaign', 'd_data_tier_id', 'SiteName')
                 .agg(
-                    fn.collect_set('b_block_id').alias('working_set_blocks'),
+                    fn.collect_set('f_block_id').alias('working_set_blocks'),
                 )
             )
         working_set_day.write.parquet(args.out)
@@ -46,28 +45,26 @@ def run(args):
         jobreports = avroreader.load("/project/awg/cms/cmssw-popularity/avro-snappy/year=201[6789]/month=*/day=*/*.avro")
         working_set_day = (jobreports
                 .join(dbs_files, col('FILE_LFN')==col('f_logical_file_name'))
-                .join(dbs_blocks, col('f_block_id')==col('b_block_id'))
                 .join(dbs_datasets, col('f_dataset_id')==col('d_dataset_id'))
                 .withColumn('day', (col('END_TIME')-col('END_TIME')%fn.lit(86400)))
                 .withColumn('input_campaign', fn.regexp_extract(col('d_dataset'), "^/[^/]*/((?:HI|PA|PN|XeXe|)Run201\d\w-[^-]+|CMSSW_\d+|[^-]+)[^/]*/", 1))
                 .withColumn('isCrab', col('APP_INFO').contains(':crab:'))
                 .groupBy('day', 'isCrab', 'input_campaign', 'd_data_tier_id', 'SITE_NAME')
                 .agg(
-                    fn.collect_set('b_block_id').alias('working_set_blocks'),
+                    fn.collect_set('f_block_id').alias('working_set_blocks'),
                 )
             )
         working_set_day.write.parquet(args.out)
     elif args.source == 'xrootd':
         jobreports = spark.read.json("/project/monitoring/archive/xrootd/raw/gled/201[89]/*/*/*.json.gz")
         working_set_day = (jobreports
-                .join(dbs_files, col('file_lfn')==col('f_logical_file_name'))
-                .join(dbs_blocks, col('f_block_id')==col('b_block_id'))
+                .join(dbs_files, col('data.file_lfn')==col('f_logical_file_name'))
                 .join(dbs_datasets, col('f_dataset_id')==col('d_dataset_id'))
-                .withColumn('day', (col('end_time')-col('end_time')%fn.lit(86400000))/fn.lit(1000))
+                .withColumn('day', (col('data.end_time')-col('data.end_time')%fn.lit(86400000))/fn.lit(1000))
                 .withColumn('input_campaign', fn.regexp_extract(col('d_dataset'), "^/[^/]*/((?:HI|PA|PN|XeXe|)Run201\d\w-[^-]+|CMSSW_\d+|[^-]+)[^/]*/", 1))
-                .groupBy('day', 'input_campaign', 'd_data_tier_id')
+                .groupBy('day', 'input_campaign', 'd_data_tier_id', 'data.client_domain')
                 .agg(
-                    fn.collect_set('b_block_id').alias('working_set_blocks'),
+                    fn.collect_set('f_block_id').alias('working_set_blocks'),
                 )
             )
         working_set_day.write.parquet(args.out)
