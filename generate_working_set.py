@@ -68,6 +68,28 @@ def run(args):
                 )
             )
         working_set_day.write.parquet(args.out)
+    elif args.source == 'fwjr':
+        jobreports_prod = avroreader.load("/cms/wmarchive/avro/fwjr/201[789]/*/*/*.avro")
+        jobreports_crab = avroreader.schema(jobreports_prod.schema).load("/cms/wmarchive/avro/crab/201[789]/*/*/*.avro")
+        jobreports = (jobreports_prod.union(jobreports_crab)
+                            .select(fn.explode(col("steps")).alias("cmsRun"), "*")
+                            .drop("steps")
+                            .filter(col("cmsRun.name").isin(["cmsRun"]+["cmsRun%d" % i for i in range(5)]))
+                            )
+        # jobreports.printSchema()
+        working_set_day = (jobreports
+                .filter(col("meta_data.jobstate")=="success")
+                .select(fn.explode(col('LFNArray')).alias('lfn'), col('meta_data.ts').alias('time'), col('cmsRun.site').alias('site_name'))
+                .join(dbs_files, col('lfn')==col('f_logical_file_name'))
+                .join(dbs_datasets, col('f_dataset_id')==col('d_dataset_id'))
+                .withColumn('day', (col('time')-col('time')%fn.lit(86400000)))
+                .withColumn('input_campaign', fn.regexp_extract(col('d_dataset'), "^/[^/]*/((?:HI|PA|PN|XeXe|)Run201\d\w-[^-]+|CMSSW_\d+|[^-]+)[^/]*/", 1))
+                .groupBy('day', 'input_campaign', 'd_data_tier_id', 'site_name')
+                .agg(
+                    fn.collect_set('f_block_id').alias('working_set_blocks'),
+                )
+            )
+        working_set_day.write.parquet(args.out)
 
 
 if __name__ == '__main__':
@@ -77,7 +99,7 @@ if __name__ == '__main__':
             )
     defpath = "hdfs://analytix/user/ncsmith/working_set_day"
     parser.add_argument("--out", metavar="OUTPUT", help="Output path in HDFS for result (default: %s)" % defpath, default=defpath)
-    parser.add_argument("--source", help="Source", default='classads', choices=['classads', 'cmssw', 'xrootd'])
+    parser.add_argument("--source", help="Source", default='classads', choices=['classads', 'cmssw', 'xrootd', 'fwjr'])
 
     args = parser.parse_args()
     run(args)
