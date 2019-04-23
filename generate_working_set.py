@@ -56,7 +56,7 @@ def run(args):
             )
         working_set_day.write.parquet(args.out)
     elif args.source == 'xrootd':
-        jobreports = spark.read.json("/project/monitoring/archive/xrootd/raw/gled/201[89]/*/*/*.json.gz")
+        jobreports = spark.read.json("/project/monitoring/archive/xrootd/raw/gled/201[6789]/*/*/*.json.gz")
         working_set_day = (jobreports
                 .join(dbs_files, col('data.file_lfn')==col('f_logical_file_name'))
                 .join(dbs_datasets, col('f_dataset_id')==col('d_dataset_id'))
@@ -82,7 +82,7 @@ def run(args):
                 .select(fn.explode(col('LFNArray')).alias('lfn'), col('meta_data.ts').alias('time'), col('cmsRun.site').alias('site_name'))
                 .join(dbs_files, col('lfn')==col('f_logical_file_name'))
                 .join(dbs_datasets, col('f_dataset_id')==col('d_dataset_id'))
-                .withColumn('day', (col('time')-col('time')%fn.lit(86400000)))
+                .withColumn('day', (col('time')-col('time')%fn.lit(86400)))
                 .withColumn('input_campaign', fn.regexp_extract(col('d_dataset'), "^/[^/]*/((?:HI|PA|PN|XeXe|)Run201\d\w-[^-]+|CMSSW_\d+|[^-]+)[^/]*/", 1))
                 .groupBy('day', 'input_campaign', 'd_data_tier_id', 'site_name')
                 .agg(
