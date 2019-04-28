@@ -27,17 +27,14 @@ def run(args):
     dbs_datasets = csvreader.schema(schemas.schema_datasets()).load("/project/awg/cms/CMS_DBS3_PROD_GLOBAL/current/DATASETS/part-m-00000")
 
     if args.source == 'classads':
-        jobreports = avroreader.load("/project/awg/cms/jm-data-popularity/avro-snappy/year=201[6789]/month=*/day=*/*.avro")
+        jobreports = spark.read.json("/project/monitoring/archive/condor/raw/metric/201[6789]/*/*/*.json.gz")
         working_set_day = (jobreports
-                .filter((col('JobExecExitTimeStamp')>0) & (col('JobExecExitCode')==0))
-                .replace('//', '/', 'FileName')
-                .join(dbs_files, col('FileName')==col('f_logical_file_name'))
-                .join(dbs_datasets, col('f_dataset_id')==col('d_dataset_id'))
-                .withColumn('day', (col('JobExecExitTimeStamp')-col('JobExecExitTimeStamp')%fn.lit(86400000))/fn.lit(1000))
+                .join(dbs_datasets, col('data.DESIRED_CMSDataset')==col('d_dataset'))
+                .withColumn('day', (col('data.RecordTime')-col('data.RecordTime')%fn.lit(86400000))/fn.lit(1000))
                 .withColumn('input_campaign', fn.regexp_extract(col('d_dataset'), "^/[^/]*/((?:HI|PA|PN|XeXe|)Run201\d\w-[^-]+|CMSSW_\d+|[^-]+)[^/]*/", 1))
-                .groupBy('day', 'SubmissionTool', 'input_campaign', 'd_data_tier_id', 'SiteName')
+                .groupBy('day', 'input_campaign', 'd_data_tier_id')
                 .agg(
-                    fn.collect_set('f_block_id').alias('working_set_blocks'),
+                    fn.collect_set('d_dataset_id').alias('working_set'),
                 )
             )
         working_set_day.write.parquet(args.out)
