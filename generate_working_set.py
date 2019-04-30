@@ -27,10 +27,17 @@ def run(args):
     dbs_datasets = csvreader.schema(schemas.schema_datasets()).load("/project/awg/cms/CMS_DBS3_PROD_GLOBAL/current/DATASETS/part-m-00000")
 
     if args.source == 'classads':
-        jobreports = spark.read.json("/project/monitoring/archive/condor/raw/metric/201[6789]/*/*/*.json.gz")
+        schema = types.StructType([
+            types.StructField("data", types.StructType([
+                    types.StructField("DESIRED_CMSDataset", types.StringType(), True),
+                    types.StructField("RecordTime", types.LongType(), True),
+                ]), False),
+            ])
+        jobreports = spark.read.schema(schema).json("/project/monitoring/archive/condor/raw/metric/201[6789]/*/*/*.json.gz")
         working_set_day = (jobreports
-                .join(dbs_datasets, col('data.DESIRED_CMSDataset')==col('d_dataset'))
+                .filter(col('data.DESIRED_CMSDataset').isNotNull())
                 .withColumn('day', (col('data.RecordTime')-col('data.RecordTime')%fn.lit(86400000))/fn.lit(1000))
+                .join(dbs_datasets, col('data.DESIRED_CMSDataset')==col('d_dataset'))
                 .withColumn('input_campaign', fn.regexp_extract(col('d_dataset'), "^/[^/]*/((?:HI|PA|PN|XeXe|)Run201\d\w-[^-]+|CMSSW_\d+|[^-]+)[^/]*/", 1))
                 .groupBy('day', 'input_campaign', 'd_data_tier_id')
                 .agg(
