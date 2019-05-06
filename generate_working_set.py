@@ -45,6 +45,21 @@ def run(args):
                 )
             )
         working_set_day.write.parquet(args.out)
+    elif args.source == 'jobmonitoring':
+        jobreports = avroreader.load("/project/awg/cms/jm-data-popularity/avro-snappy/year=201[6789]/month=*/day=*/*.avro")
+        working_set_day = (jobreports
+                .filter((col('JobExecExitTimeStamp')>0) & (col('JobExecExitCode')==0))
+                .replace('//', '/', 'FileName')
+                .join(dbs_files, col('FileName')==col('f_logical_file_name'))
+                .join(dbs_datasets, col('f_dataset_id')==col('d_dataset_id'))
+                .withColumn('day', (col('JobExecExitTimeStamp')-col('JobExecExitTimeStamp')%fn.lit(86400000))/fn.lit(1000))
+                .withColumn('input_campaign', fn.regexp_extract(col('d_dataset'), "^/[^/]*/((?:HI|PA|PN|XeXe|)Run201\d\w-[^-]+|CMSSW_\d+|[^-]+)[^/]*/", 1))
+                .groupBy('day', 'SubmissionTool', 'input_campaign', 'd_data_tier_id', 'SiteName')
+                .agg(
+                    fn.collect_set('f_block_id').alias('working_set_blocks'),
+                )
+            )
+        working_set_day.write.parquet(args.out)
     elif args.source == 'cmssw':
         jobreports = avroreader.load("/project/awg/cms/cmssw-popularity/avro-snappy/year=201[6789]/month=*/day=*/*.avro")
         working_set_day = (jobreports
@@ -103,7 +118,7 @@ if __name__ == '__main__':
             )
     defpath = "hdfs://analytix/user/ncsmith/working_set_day"
     parser.add_argument("--out", metavar="OUTPUT", help="Output path in HDFS for result (default: %s)" % defpath, default=defpath)
-    parser.add_argument("--source", help="Source", default='classads', choices=['classads', 'cmssw', 'xrootd', 'fwjr'])
+    parser.add_argument("--source", help="Source", default='classads', choices=['classads', 'cmssw', 'xrootd', 'fwjr', 'jobmonitoring'])
 
     args = parser.parse_args()
     run(args)
