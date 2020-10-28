@@ -224,7 +224,7 @@ def run(args):
         working_set_day = (
             get_df_wmarchive(spark, args.dates)
             .withColumn("day", (col("timestamp") - col("timestamp") % fn.lit(86400)))
-            .join(dbs_files, col("lfn") == col("f_logical_file_name"))
+            .join(dbs_files, col("file_lfn") == col("f_logical_file_name"))
             .join(dbs_datasets, col("f_dataset_id") == col("d_dataset_id"))
             .groupBy("day", "input_campaign", "d_data_tier_id", "site_name")
             .agg(
