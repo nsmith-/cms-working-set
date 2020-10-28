@@ -33,7 +33,8 @@ def run(args):
                     types.StructField("RecordTime", types.LongType(), True),
                 ]), False),
             ])
-        jobreports = spark.read.schema(schema).json("/project/monitoring/archive/condor/raw/metric/201[6789]/*/*/*.json.gz")
+        jobreports = spark.read.schema(schema).json("/project/monitoring/archive/condor/raw/metric/2019/*/*/*.json.gz")
+        jobreports = jobreports.union(spark.read.schema(schema).json("/project/monitoring/archive/condor/raw/metric/2020/*/*/*.json.gz"))
         working_set_day = (jobreports
                 .filter(col('data.DESIRED_CMSDataset').isNotNull())
                 .withColumn('day', (col('data.RecordTime')-col('data.RecordTime')%fn.lit(86400000))/fn.lit(1000))
@@ -46,7 +47,8 @@ def run(args):
             )
         working_set_day.write.parquet(args.out)
     elif args.source == 'jobmonitoring':
-        jobreports = avroreader.load("/project/awg/cms/jm-data-popularity/avro-snappy/year=201[6789]/month=*/day=*/*.avro")
+        jobreports = avroreader.load("/project/awg/cms/jm-data-popularity/avro-snappy/year=2019/month=*/day=*/*.avro")
+        jobreports = jobreports.union(avroreader.load("/project/awg/cms/jm-data-popularity/avro-snappy/year=2020/month=*/day=*/*.avro"))
         working_set_day = (jobreports
                 .filter((col('JobExecExitTimeStamp')>0) & (col('JobExecExitCode')==0))
                 .replace('//', '/', 'FileName')
@@ -61,7 +63,8 @@ def run(args):
             )
         working_set_day.write.parquet(args.out)
     elif args.source == 'cmssw':
-        jobreports = avroreader.load("/project/awg/cms/cmssw-popularity/avro-snappy/year=201[6789]/month=*/day=*/*.avro")
+        jobreports = avroreader.load("/project/awg/cms/cmssw-popularity/avro-snappy/year=2019/month=*/day=*/*.avro")
+        jobreports = jobreports.union(avroreader.load("/project/awg/cms/cmssw-popularity/avro-snappy/year=2020/month=*/day=*/*.avro"))
         working_set_day = (jobreports
                 .join(dbs_files, col('FILE_LFN')==col('f_logical_file_name'))
                 .join(dbs_datasets, col('f_dataset_id')==col('d_dataset_id'))
@@ -75,7 +78,8 @@ def run(args):
             )
         working_set_day.write.parquet(args.out)
     elif args.source == 'xrootd':
-        jobreports = spark.read.json("/project/monitoring/archive/xrootd/raw/gled/201[6789]/*/*/*.json.gz")
+        jobreports = spark.read.json("/project/monitoring/archive/xrootd/raw/gled/2019/*/*/*.json.gz")
+        jobreports = jobreports.union(spark.read.json("/project/monitoring/archive/xrootd/raw/gled/2020/*/*/*.json.gz"))
         working_set_day = (jobreports
                 .join(dbs_files, col('data.file_lfn')==col('f_logical_file_name'))
                 .join(dbs_datasets, col('f_dataset_id')==col('d_dataset_id'))
@@ -88,13 +92,15 @@ def run(args):
             )
         working_set_day.write.parquet(args.out)
     elif args.source == 'fwjr':
-        jobreports_prod = avroreader.load("/cms/wmarchive/avro/fwjr/201[789]/*/*/*.avro")
-        jobreports_crab = avroreader.schema(jobreports_prod.schema).load("/cms/wmarchive/avro/crab/201[789]/*/*/*.avro")
-        jobreports = (jobreports_prod.union(jobreports_crab)
-                            .select(fn.explode(col("steps")).alias("cmsRun"), "*")
-                            .drop("steps")
-                            .filter(col("cmsRun.name").isin(["cmsRun"]+["cmsRun%d" % i for i in range(5)]))
-                            )
+        jobreports = avroreader.load("/cms/wmarchive/avro/fwjr/2019/*/*/*.avro")
+        jobreports = jobreports.union(avroreader.schema(jobreports.schema).load("/cms/wmarchive/avro/crab/2019/*/*/*.avro"))
+        jobreports = jobreports.union(avroreader.load("/cms/wmarchive/avro/fwjr/2020/*/*/*.avro"))
+        jobreports = jobreports.union(avroreader.schema(jobreports.schema).load("/cms/wmarchive/avro/crab/2020/*/*/*.avro"))
+        jobreports = (jobreports
+                      .select(fn.explode(col("steps")).alias("cmsRun"), "*")
+                      .drop("steps")
+                      .filter(col("cmsRun.name").isin(["cmsRun"]+["cmsRun%d" % i for i in range(5)]))
+                      )
         # jobreports.printSchema()
         working_set_day = (jobreports
                 .filter(col("meta_data.jobstate")=="success")
