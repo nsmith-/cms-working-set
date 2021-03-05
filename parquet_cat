@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+# cat all parquet files in a directory
+
+set -eu -o pipefail
+
+dir="${1:-test10_xrootd_with-created-by/}"
+nf=$(ls -1 "${dir}"/*.parquet | wc -l)
+
+echo "Working directory: ${dir}"
+echo "Found ${nf} parquet files."
+
+find "${dir}" -name "*.parquet" -type f \
+    | xargs -L 1 -P "$(nproc)" -I % bash -c 'parquet-tools cat % > %_cat'
+
+cat "${dir}"/*_cat > "${dir}"/parquet_cat_all
+rm "${dir}"/*_cat
+echo "Bye."
